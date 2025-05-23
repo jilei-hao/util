@@ -20,6 +20,17 @@ def append_unstructured_grid(model_list):
   return filter_append.GetOutput()
 
 
+def convert_unstructured_grid_to_polydata(unstructured_grid):
+  """
+  Convert an unstructured grid to a polydata object.
+  """
+  geometry_filter = vtk.vtkGeometryFilter()
+  geometry_filter.SetInputData(unstructured_grid)
+  geometry_filter.Update()
+  polydata = geometry_filter.GetOutput()
+  return polydata
+
+
 def readPolyData(filename):
   """Read polydata from file.
   Args:
