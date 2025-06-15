@@ -1,6 +1,8 @@
 import vtk
 import numpy as np
 from sklearn.decomposition import PCA
+from vtk.util import numpy_support
+import SimpleITK as sitk
 
 def add_label_as_point_data(model, label):
   vtk_array = vtk.vtkIntArray()
@@ -529,3 +531,70 @@ def createAngleFromPoints(origin, p1, p2):
   polydata.SetLines(lines)
 
   return polydata
+
+
+def vtk_to_sitk(vtk_image):
+    # Extract dimensions, spacing, and origin
+    dims = vtk_image.GetDimensions()
+    spacing = vtk_image.GetSpacing()
+    origin = vtk_image.GetOrigin()
+
+    # Extract the scalar data as a NumPy array
+    scalars = vtk_image.GetPointData().GetScalars()
+    np_array = numpy_support.vtk_to_numpy(scalars)
+    np_array = np_array.reshape(dims[2], dims[1], dims[0])  # Reshape to (z, y, x)
+
+    # Create a SimpleITK image
+    sitk_image = sitk.GetImageFromArray(np_array)
+    sitk_image.SetSpacing(spacing)
+    sitk_image.SetOrigin(origin)
+
+    # Set the direction (identity matrix for default)
+    direction = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    sitk_image.SetDirection(direction)
+
+def polydata_to_image(polydata, spacing=(1.0, 1.0, 1.0), dimensions=(100, 100, 100)):
+    # Get bounds of the mesh (xmin, xmax, ymin, ymax, zmin, zmax)
+    bounds = polydata.GetBounds()
+    print(f"Mesh bounds: {bounds}")
+
+    # Define image volume parameters
+    origin = (bounds[0], bounds[2], bounds[4])  # start of volume grid
+    dims = dimensions
+    spacing = spacing
+
+    # Create an empty vtkImageData volume
+    image = vtk.vtkImageData()
+    image.SetOrigin(origin)
+    image.SetSpacing(spacing)
+    image.SetDimensions(dims)
+    image.AllocateScalars(vtk.VTK_UNSIGNED_CHAR, 1)
+
+    # Initialize the volume with 1
+    extent = image.GetExtent()
+    for z in range(extent[4], extent[5]+1):
+        for y in range(extent[2], extent[3]+1):
+            for x in range(extent[0], extent[1]+1):
+                image.SetScalarComponentFromFloat(x, y, z, 0, 1)
+
+    # Convert mesh to stencil
+    poly_to_stencil = vtk.vtkPolyDataToImageStencil()
+    poly_to_stencil.SetInputData(polydata)
+    poly_to_stencil.SetOutputOrigin(origin)
+    poly_to_stencil.SetOutputSpacing(spacing)
+    poly_to_stencil.SetOutputWholeExtent(image.GetExtent())
+    poly_to_stencil.Update()
+
+    # Apply stencil to image to fill inside mesh voxels with 1
+    stencil = vtk.vtkImageStencil()
+    stencil.SetInputData(image)
+    stencil.SetStencilData(poly_to_stencil.GetOutput())
+    stencil.ReverseStencilOff()
+    stencil.SetBackgroundValue(0)
+    stencil.Update()
+
+    # Extract vtkImageData from stencil filter
+    output_image = stencil.GetOutput()
+
+    # Convert vtkImageData to simpleITK image
+    return vtk_to_sitk(output_image)

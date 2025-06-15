@@ -27,7 +27,7 @@ def create_gif_from_images(image_folder, output_gif, duration=200):
   )
 
 def main():
-  if sys.argc != 4:
+  if len(sys.argv) != 4:
     print("Usage: python create_gif.py <image_folder> <output_gif> <duration>")
     sys.exit(1)
 
@@ -36,6 +36,6 @@ def main():
   duration = int(sys.argv[3])
   create_gif_from_images(image_folder, output_gif, duration)
 
-  
+
 if __name__ == "__main__":
   main()
